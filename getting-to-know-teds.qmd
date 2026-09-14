@@ -1,0 +1,436 @@
+---
+title: "Getting to Know TEDS-A"
+author: "Amber Camp"
+date: "`r Sys.Date()`"
+format: html
+editor: visual
+toc: true
+---
+
+## Before We Start
+
+Get to know your data well enough to figure out *which* questions it can actually answer. Every dataset has a personality!
+
+A note on this notebook: chunks that start with `#| eval: false` are **yours** to complete. Fill in the blanks (`___`), then delete the `#| eval: false` line so the chunk runs when you render.
+
+## Load Libraries
+
+If you don't have the below packages, run the relevant lines here:
+
+```{r}
+# install.packages("tidyverse")
+# install.packages("janitor")
+# install.packages("naniar")
+```
+
+Load libraries (all of them).
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(janitor) # clean_names() and tabyl()
+library(naniar) # tools for exploring and visualizing missing data
+options(scipen = 99) # turns off scientific notation
+```
+
+## TEDS-A Data
+
+Treatment Episode Data Set-Admissions (TEDS-A), 2023, from the Substance Abuse and Mental Health Services Administration (SAMHSA). The codebook can be found [here](https://www.samhsa.gov/data/system/files/media-puf-file/teds-a-2023-ds0001-info-codebook_v1.pdf).
+
+Make sure `tedsa_puf_2023.rdata` is saved in the `data` folder of your project.
+
+### Read the Codebook First (Seriously!)
+
+Before you touch the data, open the codebook and answer the following. Write your answers right here in the notebook. These answers are part of your data audit.
+
+1.  Read the introduction and the "Universe" section. **What is one row in this dataset?** Be specific.
+
+    **Your answer:**
+
+2.  Read "Coverage" and "Data Limitations." **Name at least three kinds of people or treatment settings that will *not* show up in this data.**
+
+    **Your answer:**
+
+3.  Look at Appendix A. Some variables come from the "Minimum data set" and some from the "Supplemental data set." **What's the difference, and why might it matter for missing data?**
+
+    **Your answer:**
+
+4.  Find the "State Exclusions" table. **Which states are excluded in 2023?**
+
+    **Your answer:**
+
+5.  Use Ctrl+F (Cmd+F) to search the codebook for the word "mental." **Which variables come up, and what do they actually measure? What does that tell you about the kind of treatment this dataset describes?**
+
+    **Your answer:**
+
+## Loading an `.rdata` File
+
+So far we've mostly read in data with functions like `read_csv()`, where *we* choose the name of the dataframe. An `.rdata` file works differently: `load()` drops objects into your environment with whatever name they were saved under. So we need to ask R what it just loaded.
+
+```{r}
+loaded_name <- load("data/tedsa_puf_2023.rdata")
+loaded_name # what's the name of the object we just loaded?
+```
+
+Now copy that object into a dataframe with a name we like, and clean up the column names. I suggest `teds_a` for now.
+
+```{r}
+teds_a <- get(loaded_name) %>%
+  clean_names() # makes all column names lowercase with underscores
+
+# remove the original copy so we aren't holding two giant dataframes in memory
+if (loaded_name != "teds_a") rm(list = loaded_name)
+```
+
+### First Look
+
+```{r}
+dim(teds_a)
+glimpse(teds_a)
+```
+
+How many rows and columns are there? What *type* does R think most of these columns are? Maybe try `skimr`.
+
+**Your answer:**
+
+### One Row Is Not One Person
+
+`caseid` is unique for every row. Let's confirm.
+
+```{r}
+n_distinct(teds_a$caseid) == nrow(teds_a)
+```
+
+Go back to the "Data Limitations" section of the codebook. If `caseid` is unique for every row, what is it identifying? Can one person show up more than once?
+
+**Your answer:**
+
+## Numbers That Aren't Numbers
+
+R thinks most of these columns are numbers. Let's see what happens when we treat them that way.
+
+```{r}
+class(teds_a$age)
+summary(teds_a$age)
+```
+
+According to R, the "mean age" is somewhere around 7. Is anyone in this dataset 7 years old? Look up `AGE` in the codebook.
+
+**Your answer:**
+
+Here's the big idea: **most of the columns in TEDS are categories wearing number costumes.** A `5` in `age` doesn't mean five years, it means a *bin* of ages. A `15` in `stfips` doesn't mean Hawaiʻi is "more" than Alaska (`2`). If you calculate a mean, a standard deviation, or a correlation on these codes, R will happily give you an answer, and it will be meaningless.
+
+## Zooming In on Hawaiʻi
+
+How many admissions does each state have?
+
+```{r}
+state_counts <- teds_a %>%
+  tabyl(stfips) %>%
+  arrange(desc(n))
+
+state_counts
+```
+
+Filter down to Hawaiʻi.
+
+```{r}
+hawaii_fips <- 15 # confirm this in the STFIPS section of the codebook. where does this code come from?
+
+teds_hi <- teds_a %>%
+  filter(stfips == hawaii_fips)
+
+nrow(teds_hi)
+```
+
+The national file is big. If you don't need national comparisons right now, remove it to free up memory. (You can always reload it later.)
+
+```{r}
+rm(teds_a)
+invisible(gc()) # "garbage collection" - asks R to actually release the memory
+```
+
+How many admissions are in Hawaiʻi? What might that number mean once you start splitting the data into smaller groups (by age, by substance, by service type...)?
+
+**Your answer:**
+
+## Missing Data (Where Is It Hiding?)
+
+What data is missing? Examine with `naniar`.
+
+```{r}
+miss_var_summary(teds_hi)
+```
+
+No missing data at all? That seems... too good to be true. Let's look closer at one variable.
+
+```{r}
+teds_hi %>%
+  tabyl(employ)
+```
+
+What is `-9`? Look up `EMPLOY` in the codebook and find the label for `-9`.
+
+**Your answer:**
+
+TEDS doesn't use `NA`. It codes missing values as `-9`, and R has no way of knowing that `-9` means "missing" unless we tell it. Let's tell it, for every column at once.
+
+```{r}
+teds_hi <- teds_hi %>%
+  mutate(across(everything(), ~ na_if(.x, -9))) # across every column, turn -9 into NA
+```
+
+Inspect once again.
+
+```{r}
+miss_var_summary(teds_hi)
+
+gg_miss_var(teds_hi)
+
+vis_miss(teds_hi) # our Hawaiʻi subset is small enough to visualize all of it
+```
+
+Which variables are mostly or entirely missing for Hawaiʻi? Compare a couple of them to the national percentages listed in the codebook. Is Hawaiʻi different?
+
+**Your answer:**
+
+### Not All Missing Is the Same
+
+Now that everything is `NA`, it's easy to forget *why* something is missing. Try this:
+
+```{r}
+teds_hi %>%
+  tabyl(sex, preg)
+```
+
+Read the `PREG` entry in the codebook. Why are all of those values missing for one group?
+
+**Your answer:**
+
+Now read the descriptions for `DETCRIM` and `DETNLF`. When would those be missing on purpose?
+
+**Your answer:**
+
+There are (at least) three different kinds of "missing" hiding in `NA`:
+
+- **Not applicable** - the question doesn't apply to this person
+
+- **Not collected** - Hawaiʻi doesn't report this variable at all
+
+- **Unknown** - it applied, and it wasn't recorded
+
+These mean very different things for your analysis. How you handle them is a researcher choice, and you should be able to explain yours.
+
+## From Codes to Labels
+
+Numbers are hard to read and easy to misuse. Turn codes into labeled categories using `factor()`. We'll keep the original column and create a new labeled one right next to it, so we can check our work.
+
+### Example 1: Service Setting
+
+`services` is a *nominal* variable: categories with no natural order. Copy the labels from the `SERVICES` section of the codebook.
+
+```{r}
+teds_hi <- teds_hi %>%
+  mutate(services_lbl = factor(services,
+                               levels = 1:8,
+                               labels = c("Detox, 24-hour, hospital inpatient",
+                                          "Detox, 24-hour, free-standing residential",
+                                          "Rehab/residential, hospital (non-detox)",
+                                          "Rehab/residential, short term (30 days or fewer)",
+                                          "Rehab/residential, long term (more than 30 days)",
+                                          "Ambulatory, intensive outpatient",
+                                          "Ambulatory, non-intensive outpatient",
+                                          "Ambulatory, detoxification")))
+```
+
+**Always check your recode.** [Every code should line up with exactly one label]{.underline}.
+
+```{r}
+teds_hi %>%
+  tabyl(services, services_lbl)
+```
+
+Since there's no natural order, sorting by frequency makes a readable plot.
+
+```{r}
+ggplot(teds_hi, aes(x = fct_infreq(services_lbl))) +
+  geom_bar() +
+  coord_flip() +
+  labs(x = "Service setting at admission",
+       y = "Number of admissions",
+       title = "Hawaiʻi admissions by service setting",
+       subtitle = "TEDS-A 2023 (SAMHSA)")
+```
+
+### Example 2: Age
+
+`age` is *ordinal*: the categories have a meaningful order. Here, sorting by frequency would scramble that order, so we don't.
+
+```{r}
+teds_hi <- teds_hi %>%
+  mutate(age_lbl = factor(age,
+                          levels = 1:12,
+                          labels = c("12-14", "15-17", "18-20", "21-24",
+                                     "25-29", "30-34", "35-39", "40-44",
+                                     "45-49", "50-54", "55-64", "65+")))
+
+teds_hi %>%
+  tabyl(age, age_lbl)
+
+ggplot(teds_hi, aes(x = age_lbl)) +
+  geom_bar() +
+  labs(x = "Age at admission",
+       y = "Number of admissions",
+       title = "Hawaiʻi admissions by age group",
+       subtitle = "TEDS-A 2023 (SAMHSA)")
+```
+
+What do you notice about the bin widths? What does that mean if you want to talk about "younger" vs "older" clients?
+
+**Your answer:**
+
+### What About the NAs?
+
+By default, `factor()` leaves `NA` as `NA`, and `ggplot` will show it as its own bar. If you want missing values to have a visible, named category in tables and plots, you can do this:
+
+```{r}
+teds_hi %>%
+  mutate(age_lbl = fct_na_value_to_level(age_lbl, level = "Missing")) %>%
+  tabyl(age_lbl)
+```
+
+Whether you keep, label, or drop missing values is (you guessed it) a researcher choice.
+
+## String Gotchas
+
+Once your codes become labels, you're working with text. Text has to match *exactly*.
+
+```{r}
+"Ambulatory, detoxification" == "Ambulatory, detoxification"
+"Ambulatory, detoxification" == "Ambulatory, detoxification " # one sneaky space at the end
+"Ambulatory, detoxification" == "ambulatory, detoxification"  # capitalization counts
+```
+
+If you ever `filter()` for a label and get zero rows back, check for spaces and capitalization before you panic. `str_squish()` removes extra whitespace, and `str_to_lower()` standardizes capitalization.
+
+### Collapsing Categories with `str_detect()`
+
+Sometimes eight categories is too many, especially with a small sample. `str_detect()` checks whether a piece of text appears inside a string, which makes it handy for grouping labels. The `^` means "starts with."
+
+```{r}
+teds_hi <- teds_hi %>%
+  mutate(setting_group = case_when(
+    str_detect(services_lbl, "^Detox") ~ "Detox",
+    str_detect(services_lbl, "^Rehab") ~ "Residential",
+    str_detect(services_lbl, "^Ambulatory") ~ "Outpatient"
+  ))
+
+teds_hi %>%
+  tabyl(services_lbl, setting_group)
+```
+
+Where did "Ambulatory, detoxification" end up? Is that where you would put it?
+
+Try adding a line that catches "detox" *anywhere* in the label (no `^`, and watch the capitalization!). `case_when()` checks conditions **in order** and stops at the first match, so does it matter whether your new line goes first or last? Which grouping makes more sense, and why?
+
+**Your answer:**
+
+### Codes as Text: Leading Zeros
+
+If you ever join TEDS to another dataset (Census data, for example), you may find that the other dataset stores state codes as text with a leading zero, like `"02"` for Alaska. A number can't hold a leading zero, so you'd need to convert:
+
+```{r}
+tibble(stfips = c(2, 6, 15)) %>%
+  mutate(state_fips = sprintf("%02d", stfips)) # "pad this number to 2 digits with zeros"
+```
+
+## Your Turn: Recode Your Variables
+
+Choose the variables your research question needs. For each one, look it up in the codebook, decide whether it's nominal or ordinal, and recode it. Then **check your recode**.
+
+```{r}
+#| eval: false
+teds_hi <- teds_hi %>%
+  mutate(___ = factor(___,
+                      levels = ___,
+                      labels = c(___)))
+
+teds_hi %>%
+  tabyl(___, ___)
+```
+
+Copy that chunk as many times as you need.
+
+## Practice
+
+**1. What percentage of Hawaiʻi admissions list alcohol as the primary substance?**
+
+Hint: `tabyl()` gives you percents. `adorn_pct_formatting()` makes them readable.
+
+```{r}
+#| eval: false
+teds_hi %>%
+  tabyl(___) %>%
+  adorn_pct_formatting()
+```
+
+**2. For each service setting, what share of admissions are missing employment status?**
+
+Hint: `group_by()`, `summarize()`, and `mean(is.na(___))`. (Why does `mean()` of TRUE/FALSE give you a proportion?)
+
+```{r}
+#| eval: false
+teds_hi %>%
+  group_by(___) %>%
+  summarize(n = n(),
+            prop_missing = mean(is.na(___)))
+```
+
+**3. Write your own.** Write a plain-language question that uses at least one of *your* variables, then translate it into code.
+
+**Your question:**
+
+```{r}
+#| eval: false
+
+```
+
+## Quick EDA
+
+Make at least two plots of the variables you recoded. Choose your ordering thoughtfully (nominal vs. ordinal), and label your axes like a person who respects their audience.
+
+```{r}
+#| eval: false
+ggplot(teds_hi, aes(x = ___)) +
+  geom_bar() +
+  labs(x = "___",
+       y = "Number of admissions",
+       title = "___",
+       subtitle = "TEDS-A 2023 (SAMHSA)")
+```
+
+With a smaller sample, some bars may be very short. Before you interpret a difference between two groups, check the actual counts behind it.
+
+## Save Your Work
+
+You've put a lot of work into this dataframe! Save it so you can read it straight in next time. We'll use `.rds`, which keeps your factor levels and labels intact (a `.csv` would not).
+
+```{r}
+write_rds(teds_hi, here("data/teds_hi_clean.rds"))
+
+# next time, read it back in with:
+# teds_hi <- read_rds(here("data/teds_hi_clean.rds"))
+```
+
+## Before Next Class
+
+As a group, write a short data audit summary covering:
+
+- What one row represents, and who is *not* in this data
+
+- How many Hawaiʻi admissions there are, and what that means for your analysis
+
+- The variables you selected, why each one connects to your research question, and how much of each is missing for Hawaiʻi
+
+- **Can TEDS-A answer your research question as written?** If not, what would a dataset need to contain in order to answer it?
+
+Then revisit your research question against our five criteria (answerable, specific, non-obvious, consequential, scoped). Which criterion did the audit change the most?
