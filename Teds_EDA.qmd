@@ -1,0 +1,63 @@
+---
+title: "Teds_EDA"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(janitor) 
+library(naniar)
+library(here)
+options(scipen = 99)
+```
+
+```{r}
+TedsA <- load(here("data/tedsa_puf_2023.rdata"))
+
+teds_a <- get(TedsA) %>%
+  clean_names()
+
+teds_hi <- teds_a %>%
+  filter(stfips == 15)
+```
+
+Decode Age
+
+```{r}
+teds_hi <- teds_hi %>%
+  mutate(age_lbl = factor(age,
+                               levels = 1:12,
+                               labels = c("12-14 years ", 
+                                          "15-17 years",
+                                          "18-20 years",
+                                          "21-24 years",
+                                          "25-29 years",
+                                          "30-34 years",
+                                          "35-39 years",
+                                          "40-44 years",
+                                          "45-49 years",
+                                          "50-54 years",
+                                          "55-64 years",
+                                          "65 years and older")))
+```
+
+Decode ALCDRUG
+
+```{r}
+teds_hi <- teds_hi %>%
+  mutate(alcdrug_lbl = factor(alcdrug,
+                          levels = 0:3,
+                          labels = c("None", 
+                                     "Alcohol only",
+                                     "Other Drugs Only",
+                                     "Alcohol and other drugs")))
+```
+
+```{r}
+ggplot(teds_hi, aes(x = age_lbl)) + 
+  geom_bar(fill = "blue4", color = "black" ) + 
+  facet_wrap(~alcdrug_lbl)+
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+```

@@ -212,11 +212,11 @@ Now read the descriptions for `DETCRIM` and `DETNLF`. When would those be missin
 
 There are (at least) three different kinds of "missing" hiding in `NA`:
 
--   **Not applicable** - the question doesn't apply to this person
+- **Not applicable** - the question doesn't apply to this person
 
--   **Not collected** - Hawaiʻi doesn't report this variable at all
+- **Not collected** - Hawaiʻi doesn't report this variable at all
 
--   **Unknown** - it applied, and it wasn't recorded
+- **Unknown** - it applied, and it wasn't recorded
 
 These mean very different things for your analysis. How you handle them is a researcher choice, and you should be able to explain yours.
 
@@ -425,12 +425,12 @@ write_rds(teds_hi, here("data/teds_hi_clean.rds"))
 
 As a group, write a short data audit summary covering:
 
--   What one row represents, and who is *not* in this data
+- What one row represents, and who is *not* in this data
 
--   How many Hawaiʻi admissions there are, and what that means for your analysis
+- How many Hawaiʻi admissions there are, and what that means for your analysis
 
--   The variables you selected, why each one connects to your research question, and how much of each is missing for Hawaiʻi
+- The variables you selected, why each one connects to your research question, and how much of each is missing for Hawaiʻi
 
--   **Can TEDS-A answer your research question as written?** If not, what would a dataset need to contain in order to answer it?
+- **Can TEDS-A answer your research question as written?** If not, what would a dataset need to contain in order to answer it?
 
 Then revisit your research question against our five criteria (answerable, specific, non-obvious, consequential, scoped). Which criterion did the audit change the most?
