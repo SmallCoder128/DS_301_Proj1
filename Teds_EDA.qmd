@@ -76,7 +76,7 @@ teds_d <- get(teds_d) %>%
 
 ```{r}
 teds_d <- teds_d %>%
-  filter(frstuse1 != -9) %>%
+  filter(frstuse1 != -9 & noprior != -9) %>%
   mutate(frstuse_lbl = factor(frstuse1,
                                levels = 1:7,
                                labels = c("11 and under",
@@ -105,8 +105,66 @@ teds_d %>%
 
 ```
 
+How does Hawaii treatment centers compare with the rest of the country?
+
 ```{r}
+teds_d <- teds_d %>%
+  filter(reason != -9) %>%
+  mutate(completed = reason == 1,
+         group = if_else(stfips == 15, "Hawaii", "Rest of U.S."))
+
+teds_d %>%
+  group_by(group) %>%
+  summarise(pct_completed = mean(completed) * 100)
+
 
 ```
+```{r}
+teds_d %>%
+  group_by(group) %>%
+  summarise(pct_completed = mean(completed) * 100) %>%
+  ggplot(aes(x = group, y = pct_completed, fill = group)) +
+  geom_col(color = "black") +
+  theme_bw() +
+  labs(x = NULL, y = "% treatment completed",
+       title = "Treatment completion rate: Hawaii vs. rest of U.S.") +
+  theme(legend.position = "none")
+```
 
+```{r}
+teds_d %>%
+  filter(reason != -9) %>%
+  mutate(group = if_else(stfips == 15, "Hawaii", "Rest of U.S."),
+         reason_lbl = factor(reason,
+                              levels = 1:7,
+                              labels = c("Completed", "Dropped out",
+                                         "Terminated by facility",
+                                         "Transferred", "Incarcerated",
+                                         "Death", "Other"))) %>%
+  ggplot(aes(x = group, fill = reason_lbl)) +
+  geom_bar(position = "fill", color = "black") +
+  theme_bw() +
+  labs(x = NULL, y = "% of discharges", fill = "Discharge reason",
+       title = "Discharge outcomes: Hawaii vs. rest of U.S.")
+```
+Hawaii's drug distribution?
+```{r}
+teds_d %>%
+  filter(sub1 != -9, stfips == 15) %>%
+  mutate(sub1_lbl = factor(sub1,
+                            levels = c(10, 2, 4, 5, 7, 3, 19, 13, 11, 12),
+                            labels = c("Methamphetamine/speed", "Alcohol",
+                                       "Marijuana/hashish", "Heroin",
+                                       "Other opiates/synthetics", "Cocaine/crack",
+                                       "Other drugs", "Benzodiazepines",
+                                       "Other amphetamines", "Other stimulants"))) %>%
+  count(sub1_lbl) %>%
+  mutate(pct = n / sum(n) * 100) %>%
+  ggplot(aes(x = reorder(sub1_lbl, pct), y = pct)) +
+  geom_col(fill = "blue4", color = "black") +
+  coord_flip() +
+  theme_bw() +
+  labs(x = NULL, y = "% of Hawaii admissions",
+       title = "Primary substance at admission, Hawaii (2023)")
+```
 
