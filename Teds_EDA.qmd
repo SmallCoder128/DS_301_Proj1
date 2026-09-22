@@ -20,8 +20,8 @@ teds_a <- get(TedsA) %>%
 teds_hi <- teds_a %>%
   filter(stfips == 15)
 ```
-#read in our data and used stfips to filter by Hawaii
-#Hawaii had 869 patient data entries
+
+#read in our data and used stfips to filter by Hawaii #Hawaii had 869 patient data entries
 
 Decode Age
 
@@ -67,6 +67,7 @@ ggplot(teds_hi, aes(x = age_lbl)) +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
 
 ```
+
 ```{r}
 teds_d <- load(here("data/tedsd_puf_2023.rdata"))
 
@@ -87,7 +88,6 @@ teds_d <- teds_d %>%
                                           "25-29 years",
                                           "30 and older")))
 ```
-
 
 ```{r}
 
@@ -119,6 +119,7 @@ teds_d %>%
 
 
 ```
+
 ```{r}
 teds_d %>%
   group_by(group) %>%
@@ -147,7 +148,9 @@ teds_d %>%
   labs(x = NULL, y = "% of discharges", fill = "Discharge reason",
        title = "Discharge outcomes: Hawaii vs. rest of U.S.")
 ```
+
 Hawaii's drug distribution?
+
 ```{r}
 teds_d %>%
   filter(sub1 != -9, stfips == 15) %>%
@@ -168,3 +171,57 @@ teds_d %>%
        title = "Primary substance at admission, Hawaii (2023)")
 ```
 
+```{r}
+library(ggsankey)
+library(paletteer)
+
+teds_ds <- teds_d |> 
+  select(reason, caseid)
+
+teds_r <- inner_join(teds_ds, teds_a, by = "caseid")
+
+teds_r <- teds_r |> 
+  mutate(reason_lbl = factor(reason,
+                             levels = 1:7,
+                             labels = c("Completed", "Dropped out",
+                                        "Terminated by facility",
+                                        "Transferred", "Incarcerated",
+                                        "Death", "Other"))) |> 
+  mutate(service_lbl = factor(services, levels = 1:8, labels = 
+                                c("Detox, 24-hour, hospital inpatient",
+                                  "Detox, 24-hour, free-standing residential", 
+                                  "Rehab/residential, hospital (non-detox)", 
+                                  "Rehab/residential, short term (30 days or fewer)", 
+                                  "Rehab/residential, long term (more than 30 days)", 
+                                  "Ambulatory, intensive outpatient", 
+                                  "Ambulatory, non-intensive outpatient",
+                                  "Ambulatory, detoxification"))) |> 
+  mutate(alcdrug_lbl = factor(alcdrug,
+                              levels = 0:3,
+                              labels = c("None", 
+                                         "Alcohol only",
+                                         "Other Drugs Only",
+                                         "Alcohol and other drugs")))
+
+teds_r_hi <- teds_r |> 
+  filter(stfips == 15)
+```
+
+```{r}
+library(ggnewscale)
+
+Hi_r_long <- teds_r_hi |>
+  make_long(alcdrug_lbl, service_lbl, reason_lbl)
+  
+ggplot(Hi_r_long, aes(x=x,
+                      next_x = next_x,
+                      node=node,
+                      next_node = next_node,
+                      fill = factor(node))) +
+  geom_sankey() +
+  scale_fill_paletteer_d("palettetown::charizard") +
+  labs(fill = "Legend")
+```
+
+```{r}
+```
