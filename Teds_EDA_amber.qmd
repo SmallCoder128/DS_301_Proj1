@@ -1,0 +1,232 @@
+---
+title: "Teds_EDA"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(janitor) 
+library(naniar)
+library(here)
+options(scipen = 99)
+```
+
+```{r}
+TedsA <- load(here("data/tedsa_puf_2023.rdata"))
+
+teds_a <- get(TedsA) %>%
+  clean_names()
+
+teds_hi <- teds_a %>%
+  filter(stfips == 15)
+```
+
+#read in our data and used stfips to filter by Hawaii #Hawaii had 869 patient data entries
+
+Decode Age
+
+```{r}
+teds_hi <- teds_hi %>%
+  mutate(age_lbl = factor(age,
+                               levels = 1:12,
+                               labels = c("12-14 years ", 
+                                          "15-17 years",
+                                          "18-20 years",
+                                          "21-24 years",
+                                          "25-29 years",
+                                          "30-34 years",
+                                          "35-39 years",
+                                          "40-44 years",
+                                          "45-49 years",
+                                          "50-54 years",
+                                          "55-64 years",
+                                          "65 years and older")))
+```
+
+#In this chunk, we organized our age groups into clusters
+
+Decode ALCDRUG
+
+```{r}
+teds_hi <- teds_hi %>%
+  mutate(alcdrug_lbl = factor(alcdrug,
+                          levels = 0:3,
+                          labels = c("None", 
+                                     "Alcohol only",
+                                     "Other Drugs Only",
+                                     "Alcohol and other drugs")))
+```
+
+# 3 visuals breaking up patients by substance usage
+
+```{r}
+ggplot(teds_hi, aes(x = age_lbl)) + 
+  geom_bar(fill = "blue4", color = "black" ) + 
+  facet_wrap(~alcdrug_lbl)+
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+```
+
+```{r}
+teds_d <- load(here("data/tedsd_puf_2023.rdata"))
+
+teds_d <- get(teds_d) %>%
+  clean_names()
+```
+
+```{r}
+teds_d <- teds_d %>%
+  filter(frstuse1 != -9 & noprior != -9) %>%
+  mutate(frstuse_lbl = factor(frstuse1,
+                               levels = 1:7,
+                               labels = c("11 and under",
+                                          "12-14 years",
+                                          "15-17 years",
+                                          "18-20 years",
+                                          "21-24 years",
+                                          "25-29 years",
+                                          "30 and older")))
+```
+
+```{r}
+
+#Frstuse1(x) vs NOPRIOR(2)
+
+teds_d %>%
+  group_by(frstuse_lbl) %>%
+  summarise(pct_prior = mean(noprior == 1)) %>%
+  ggplot(aes(x = frstuse_lbl, y = pct_prior, group = 1)) +
+  geom_line(color = "blue4", linewidth = 1) +
+  geom_point(size = 2) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(y = "% with prior treatment episode", x = "Age at first use")
+
+```
+
+How does Hawaii treatment centers compare with the rest of the country?
+
+```{r}
+teds_d <- teds_d %>%
+  filter(reason != -9) %>%
+  mutate(completed = reason == 1,
+         group = if_else(stfips == 15, "Hawaii", "Rest of U.S."))
+
+teds_d %>%
+  group_by(group) %>%
+  summarise(pct_completed = mean(completed) * 100)
+
+
+```
+
+```{r}
+teds_d %>%
+  group_by(group) %>%
+  summarise(pct_completed = mean(completed) * 100) %>%
+  ggplot(aes(x = group, y = pct_completed, fill = group)) +
+  geom_col(color = "black") +
+  theme_bw() +
+  labs(x = NULL, y = "% treatment completed",
+       title = "Treatment completion rate: Hawaii vs. rest of U.S.") +
+  theme(legend.position = "none")
+```
+
+```{r}
+teds_d %>%
+  filter(reason != -9) %>%
+  mutate(group = if_else(stfips == 15, "Hawaii", "Rest of U.S."),
+         reason_lbl = factor(reason,
+                              levels = 1:7,
+                              labels = c("Completed", "Dropped out",
+                                         "Terminated by facility",
+                                         "Transferred", "Incarcerated",
+                                         "Death", "Other"))) %>%
+  ggplot(aes(x = group, fill = reason_lbl)) +
+  geom_bar(position = "fill", color = "black") +
+  theme_bw() +
+  labs(x = NULL, y = "% of discharges", fill = "Discharge reason",
+       title = "Discharge outcomes: Hawaii vs. rest of U.S.")
+```
+
+Hawaii's drug distribution?
+
+```{r}
+teds_d %>%
+  filter(sub1 != -9, stfips == 15) %>%
+  mutate(sub1_lbl = factor(sub1,
+                            levels = c(10, 2, 4, 5, 7, 3, 19, 13, 11, 12),
+                            labels = c("Methamphetamine/speed", "Alcohol",
+                                       "Marijuana/hashish", "Heroin",
+                                       "Other opiates/synthetics", "Cocaine/crack",
+                                       "Other drugs", "Benzodiazepines",
+                                       "Other amphetamines", "Other stimulants"))) %>%
+  count(sub1_lbl) %>%
+  mutate(pct = n / sum(n) * 100) %>%
+  ggplot(aes(x = reorder(sub1_lbl, pct), y = pct)) +
+  geom_col(fill = "blue4", color = "black") +
+  coord_flip() +
+  theme_bw() +
+  labs(x = NULL, y = "% of Hawaii admissions",
+       title = "Primary substance at admission, Hawaii (2023)")
+```
+
+```{r}
+library(ggsankey)
+library(paletteer)
+
+teds_dr <- teds_d |> 
+  mutate(reason_lbl = factor(reason,
+                             levels = 1:7,
+                             labels = c("Completed", "Dropped out",
+                                        "Terminated by facility",
+                                        "Transferred", "Incarcerated",
+                                        "Death", "Other"))) |> 
+  mutate(service_lbl = factor(services, levels = 1:8, labels = 
+                                c("Detox, 24-hour, hospital inpatient",
+                                  "Detox, 24-hour, free-standing residential", 
+                                  "Rehab/residential, hospital (non-detox)", 
+                                  "Rehab/residential, short term (30 days or fewer)", 
+                                  "Rehab/residential, long term (more than 30 days)", 
+                                  "Ambulatory, intensive outpatient", 
+                                  "Ambulatory, non-intensive outpatient",
+                                  "Ambulatory, detoxification"))) |> 
+  mutate(alcdrug_lbl = factor(alcdrug,
+                              levels = 0:3,
+                              labels = c("None", 
+                                         "Alcohol only",
+                                         "Other Drugs Only",
+                                         "Alcohol and other drugs")))
+
+teds_dr_hi <- teds_dr |> 
+  filter(stfips == 15)
+```
+
+```{r}
+library(ggnewscale)
+library(plotly)
+
+teds_r_hi |>
+  tabyl(reason_lbl) |>
+  arrange(desc(n)) |> # arrange in desc order
+  adorn_pct_formatting(digits = 2) # fixes pct formatting to 2 digits
+
+Hi_r_long <- teds_dr_hi |>
+  make_long(alcdrug_lbl, service_lbl, reason_lbl)
+  
+p1 <- ggplot(Hi_r_long, aes(x=x,
+                      next_x = next_x,
+                      node=node,
+                      next_node = next_node,
+                      fill = factor(node),
+                      label = node)) +
+   geom_sankey() +
+   scale_fill_paletteer_d("palettetown::charizard") +
+   labs(fill = "Legend")
+
+ggplotly(p1)
+```
+
+```{r}
+length(teds_d$caseid)
+```
