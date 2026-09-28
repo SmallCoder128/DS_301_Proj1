@@ -175,12 +175,7 @@ teds_d %>%
 library(ggsankey)
 library(paletteer)
 
-teds_ds <- teds_d |> 
-  select(reason, caseid)
-
-teds_r <- inner_join(teds_ds, teds_a, by = "caseid")
-
-teds_r <- teds_r |> 
+teds_dr <- teds_d |> 
   mutate(reason_lbl = factor(reason,
                              levels = 1:7,
                              labels = c("Completed", "Dropped out",
@@ -203,25 +198,30 @@ teds_r <- teds_r |>
                                          "Other Drugs Only",
                                          "Alcohol and other drugs")))
 
-teds_r_hi <- teds_r |> 
+teds_dr_hi <- teds_dr |> 
   filter(stfips == 15)
 ```
 
 ```{r}
 library(ggnewscale)
+library(plotly)
 
-Hi_r_long <- teds_r_hi |>
+Hi_r_long <- teds_dr_hi |>
   make_long(alcdrug_lbl, service_lbl, reason_lbl)
   
-ggplot(Hi_r_long, aes(x=x,
+p1 <- ggplot(Hi_r_long, aes(x=x,
                       next_x = next_x,
                       node=node,
                       next_node = next_node,
-                      fill = factor(node))) +
-  geom_sankey() +
-  scale_fill_paletteer_d("palettetown::charizard") +
-  labs(fill = "Legend")
+                      fill = factor(node),
+                      label = node)) +
+   geom_sankey() +
+   scale_fill_paletteer_d("palettetown::charizard") +
+   labs(fill = "Legend")
+
+ggplotly(p1)
 ```
 
 ```{r}
+length(teds_d$caseid)
 ```
