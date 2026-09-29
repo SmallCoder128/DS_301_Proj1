@@ -206,7 +206,7 @@ teds_dr_hi <- teds_dr |>
 library(ggnewscale)
 library(plotly)
 
-teds_r_hi |>
+teds_dr_hi |>
   tabyl(reason_lbl) |>
   arrange(desc(n)) |> # arrange in desc order
   adorn_pct_formatting(digits = 2) # fixes pct formatting to 2 digits
@@ -225,6 +225,8 @@ p1 <- ggplot(Hi_r_long, aes(x=x,
    labs(fill = "Legend")
 
 ggplotly(p1)
+
+
 ```
 
 ```{r}
