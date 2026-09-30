@@ -225,3 +225,41 @@ ggplotly(p1)
 ```{r}
 length(teds_d$caseid)
 ```
+
+```{r}
+teds_dr_hi <- teds_dr_hi |> 
+  mutate(age_lbl = factor(age,
+                          levels = 1:12,
+                          labels = c("12-14 years ", 
+                                     "15-17 years",
+                                     "18-20 years",
+                                     "21-24 years",
+                                     "25-29 years",
+                                     "30-34 years",
+                                     "35-39 years",
+                                     "40-44 years",
+                                     "45-49 years",
+                                     "50-54 years",
+                                     "55-64 years",
+                                     "65 years and older")))
+```
+
+```{r}
+teds_dr_hi |> 
+  group_by(frstuse_lbl) |> 
+  summarise(pct_prior = mean(age))
+```
+
+## For TEDS_D
+
+```{r}
+
+teds_nnone <- teds_dr_hi |> 
+  dplyr::filter(alcdrug_lbl != "None") 
+  
+ggplot(teds_nnone, aes(x = age_lbl)) + 
+  geom_bar(fill = "blue4", color = "black" ) + 
+  facet_wrap(~alcdrug_lbl)+
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
