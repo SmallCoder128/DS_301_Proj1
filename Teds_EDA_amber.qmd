@@ -103,6 +103,30 @@ teds_d %>%
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
   labs(y = "% with prior treatment episode", x = "Age at first use")
 
+
+## amber updated line
+teds_d %>%
+  filter(noprior != -9, frstuse1 != -9, age != -9, stfips == 15) %>%
+  mutate(age_adm = case_when(
+    age <= 4 ~ "Under 25",
+    age <= 7 ~ "25–39",
+    TRUE     ~ "40+")) %>%
+  group_by(age_adm, frstuse_lbl) %>%
+  summarise(n = n(),
+            pct_prior = mean(noprior == 1),
+            se = sqrt(pct_prior * (1 - pct_prior) / n),
+            .groups = "drop") %>%
+  ggplot(aes(x = frstuse_lbl, y = pct_prior,
+             color = age_adm, group = age_adm)) +
+  geom_line(linewidth = 1) +
+  geom_pointrange(aes(ymin = pct_prior - 1.96 * se,
+                      ymax = pct_prior + 1.96 * se)) +
+  scale_y_continuous(labels = scales::percent) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "HI only", y = "% with prior treatment episode", x = "Age at first use",
+       color = "Age at admission")
+
 ```
 
 How does Hawaii treatment centers compare with the rest of the country?
@@ -226,9 +250,168 @@ p1 <- ggplot(Hi_r_long, aes(x=x,
 
 ggplotly(p1)
 
+class(teds_dr_hi$completed)
+levels(teds_dr_hi$completed)
+
+print(teds_dr_hi)
+
+m <- glm(completed ~ frstuse_lbl + service_lbl + alcdrug_lbl, family = binomial, data = teds_dr_hi)
+summary(m)
+
+# below answers this Q: Among treatment episodes discharged in Hawaiʻi in 2023, how are the type of service, the age at first use of the primary substance, and whether alcohol and/or other drugs were involved associated with the odds that the episode ended in completion, with each factor adjusted for the other two?
+
+table(teds_dr_hi$alcdrug_lbl, teds_dr_hi$completed)   # expect few rows and 0 completions for "None"
+
+teds_dr_hi2 <- teds_dr_hi |>
+  dplyr::filter(alcdrug_lbl != "None") |>
+  droplevels() |>
+  dplyr::mutate(alcdrug_lbl = relevel(alcdrug_lbl, "Other Drugs Only"))
+
+m2 <- glm(completed ~ frstuse_lbl + service_lbl + alcdrug_lbl,
+          family = binomial, data = teds_dr_hi2)
+summary(m2)
 
 ```
 
 ```{r}
-length(teds_d$caseid)
+
+dat <- teds_dr_hi |>
+  filter(stfips == 15, disyr == 2023)
+
+nrow(dat)  
+
+
+# recode
+dat <- dat |>
+  mutate(across(where(is.numeric), ~ na_if(.x, -9)))
+
+# missingness
+dat |>
+  summarise(across(c(reason, sub1, services, age, psource),
+                   ~ mean(is.na(.x)))) |>
+  pivot_longer(everything(), names_to = "var", values_to = "prop_missing")
+
+
+# recode
+# reason: 1 Completed, 2 Dropped out, 3 Terminated by facility, 4 Transferred, 5 Incarcerated, 6 Death, 7 Other
+dat <- dat |>
+  filter(reason %in% c(1, 2, 3)) |>
+  mutate(completed = reason == 1)
+
+nrow(dat)
+count(dat, completed)
+
+
+dat <- dat |>
+  mutate(
+    substance = case_match(
+      sub1,
+      2       ~ "Alcohol",
+      3       ~ "Cocaine/crack",
+      4       ~ "Marijuana",
+      c(5, 6, 7) ~ "Opioids", 
+      10      ~ "Methamphetamine",
+      c(11, 12) ~ "Other stimulants",
+      .default = "Other"),
+    service = case_match(
+      services,
+      c(1, 2, 8) ~ "Detox",
+      c(3, 4)    ~ "Residential, short",
+      5          ~ "Residential, long",
+      6          ~ "Intensive outpatient",
+      7          ~ "Outpatient"),
+    referral = case_match(
+      psource,
+      1 ~ "Self/individual",
+      7 ~ "Criminal justice",
+      c(2, 3) ~ "Health care provider",
+      .default = "Other community"),
+    age_grp = case_when(
+      age <= 3  ~ "12-20",
+      age <= 5  ~ "21-29",
+      age <= 7  ~ "30-39",
+      age <= 9  ~ "40-49",
+      !is.na(age) ~ "50+"))
+
+# sanity check cell sizes BEFORE modeling
+count(dat, substance, completed) |>
+  pivot_wider(names_from = completed, values_from = n)
+
+# collapse anything too small to estimate, then set reference levels
+dat <- dat |>
+  mutate(
+    substance = fct_lump_min(substance, min = 50, other_level = "Other"),
+    substance = fct_relevel(substance, "Methamphetamine"),  # largest group in HI!
+    service   = fct_relevel(factor(service), "Outpatient"),
+    referral  = fct_relevel(factor(referral), "Self/individual"),
+    age_grp   = factor(age_grp)) |>
+  drop_na(completed, substance, service, referral, age_grp)
+
+nrow(dat)   # how many rows did listwise deletion cost?
+
+
+# completion rate by substance
+dat |>
+  group_by(substance) |>
+  summarise(n = n(), pct_completed = mean(completed) * 100) |>
+  arrange(desc(pct_completed))
+
+# Plot
+dat |>
+  group_by(substance) |>
+  summarise(pct = mean(completed), n = n()) |>
+  ggplot(aes(x = fct_reorder(substance, pct), y = pct)) +
+  geom_col() +
+  geom_text(aes(label = paste0("n=", n)), hjust = -0.1, size = 3) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  labs(x = NULL, y = "Completed treatment",
+       title = "Completion rate by primary substance, Hawaiʻi 2023")
+
+# is substance confounded with service type? 
+dat |>
+  count(substance, service) |>
+  group_by(substance) |>
+  mutate(prop = n / sum(n)) |>
+  select(-n) |>
+  pivot_wider(names_from = service, values_from = prop)
+
+
+chisq.test(table(dat$substance, dat$completed))
+
+# model
+m_unadj <- glm(completed ~ substance, family = binomial, data = dat)
+
+m_adj   <- glm(completed ~ substance + service + age_grp + referral, family = binomial, data = dat)
+
+summary(m_adj)
+
+# does substance matter as a whole, after the other variables?
+drop1(m_adj, test = "LRT")
+
+# odds ratios with 95% CIs, unadjusted vs. adjusted side by side
+or_table <- function(m, label) {
+  broom::tidy(m, conf.int = TRUE, exponentiate = TRUE) |>
+    filter(str_detect(term, "^substance")) |>
+    transmute(term = str_remove(term, "substance"),
+              !!label := sprintf("%.2f (%.2f–%.2f)", estimate, conf.low, conf.high))
+}
+
+left_join(or_table(m_unadj, "Unadjusted OR"),
+          or_table(m_adj,   "Adjusted OR"),
+          by = "term")
+
+
+# sanity check for any huge SEs? (sign of separation / empty cells, as with alcdrug "None")
+broom::tidy(m_adj) |> filter(std.error > 2)
+
+# predicted probabilities are easier to explain than ORs
+dat |>
+  mutate(p_hat = predict(m_adj, type = "response")) |>
+  group_by(substance) |>
+  summarise(observed = mean(completed), predicted = mean(p_hat))
+
+
+
+
 ```
