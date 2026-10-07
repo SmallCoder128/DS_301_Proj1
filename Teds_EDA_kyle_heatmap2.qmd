@@ -2,6 +2,7 @@
 title: "Teds_EDA"
 format: html
 ---
+yo aichen
 
 ```{r}
 library(tidyverse)
