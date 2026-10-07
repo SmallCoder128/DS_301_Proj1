@@ -8,6 +8,7 @@ library(tidyverse)
 library(janitor) 
 library(naniar)
 library(here)
+library(dbplyr)
 options(scipen = 99)
 ```
 
@@ -253,13 +254,50 @@ teds_dr_hi |>
 ## For TEDS_D
 
 ```{r}
-
+library(dplyr)
 teds_nnone <- teds_dr_hi |> 
   dplyr::filter(alcdrug_lbl != "None") 
+
+teds_nnone <- teds_nnone |> 
+  mutate(hadprior = if_else(noprior > 0, TRUE, FALSE))
   
-ggplot(teds_nnone, aes(x = age_lbl)) + 
-  geom_bar(fill = "blue4", color = "black" ) + 
+ggplot(teds_nnone, aes(x = age_lbl, fill = hadprior)) + 
+  geom_bar() + 
   facet_wrap(~alcdrug_lbl)+
   theme_bw() + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+\
+
+```{r}
+class(teds_dr_hi)
+class(teds_dr_hi$age_lbl)
+```
+
+```{r}
+teds_dr_hi |> 
+  filter(noprior == 1) |> 
+  dplyr::count(age_lbl, frstuse_lbl) |> 
+  dplyr::group_by(age_lbl) |> 
+    mutate(prop_p = n / sum(n)) |> 
+    ggplot(aes(x = age_lbl, y = frstuse_lbl, fill = prop)) + 
+    geom_tile() +
+    scale_fill_viridis_c()
+```
+
+```{r}
+teds_dr_hi |> 
+  filter(noprior == 0) |> 
+  dplyr::count(age_lbl, frstuse_lbl) |> 
+  dplyr::group_by(age_lbl) |> 
+  mutate(prop_np = n / sum(n)) |> 
+  ggplot(aes(x = age_lbl, y = frstuse_lbl, fill = prop)) + 
+  geom_tile() +
+  scale_fill_viridis_c()
+```
+
+```{r}
+m <- glm(noprior ~ frstuse_lbl + service_lbl + age_lbl, family = binomial, data = teds_dr_hi)
+summary(m)
 ```

@@ -457,7 +457,7 @@ teds_hi_d <- TEDSD_PUF_2023 |>
   select(prior_treatment = noprior, age, insurance = hlthins,
          payer = primpay, not_in_labor = detnlf, employment = employ,
          meth = mthamflg, income = priminc, diagnosis = dsmcrit,
-         referral = psource, use_freq = freq1)
+         referral = psource, use_freq = freq1, frstuse1)
 
 teds_hi_d[teds_hi_d == -9] <- NA
 
@@ -483,5 +483,3 @@ ggplot(heat, aes(x = factor(var1, levels = vars),
        title = "Hawaii only: top 10 predictors of prior treatment",
        subtitle = "Top row = link to prior treatment")
 ```
-
-
